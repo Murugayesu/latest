@@ -1,0 +1,50 @@
+{
+  "skill_name": "latest",
+  "evals": [
+    {
+      "id": 1,
+      "name": "greenfield-python-service",
+      "prompt": "I'm starting a new project today: a Python API service using FastAPI, Pydantic, SQLAlchemy with PostgreSQL (async driver), Alembic migrations, Redis for caching, the Anthropic Python SDK for LLM calls, pytest for tests, and Ruff for linting, packaged with uv and deployed as a Docker container with a GitHub Actions CI workflow (checkout and setup actions). Give me the stack plan with the exact version of each of these I should put in pyproject.toml, the Dockerfile and the workflow file (include the Python version, PostgreSQL and Redis server versions, the Docker base image tag, and the version of each GitHub Action).",
+      "expected_output": "Every version looked up live; no pick younger than 7 days; no pre-releases; set resolved together into a lockfile; advisories checked; STACK.md written with sources and skipped releases.",
+      "files": [],
+      "assertions": [
+        "No version in the plan was published less than 7 days before the check",
+        "No pre-release version is chosen without the user being asked",
+        "Every version is attributed to a live source, or explicitly labelled unverified",
+        "The dependency set was resolved together by a package manager (a lockfile exists)",
+        "Advisories were checked on the resolved set and the result is reported",
+        "STACK.md exists and lists each technology with version and source",
+        "Newer releases that were skipped are named with the reason"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "add-dependency-to-older-project",
+      "prompt": "This is an existing app. I need to add client-side data fetching with caching (TanStack Query) and form handling (React Hook Form with a Zod resolver). Add them to the project and tell me which versions you chose and why.",
+      "expected_output": "Installed versions (Next 14, React 18, Zod 3, TypeScript 5) are left unchanged; new packages are chosen to fit those; versions looked up live and aged; package.json pins exact versions; STACK.md records the result.",
+      "files": ["fixtures/older-next-app/package.json", "fixtures/older-next-app/package-lock.json"],
+      "assertions": [
+        "next, react, react-dom, zod and typescript versions in package.json are unchanged",
+        "The new packages' peer ranges accept the installed React 18 and Zod 3",
+        "No newly added version was published less than 7 days before the check",
+        "New dependencies are pinned to exact versions (no ^ or ~)",
+        "A newer major of the existing framework is mentioned separately, not applied",
+        "STACK.md exists and lists the added technologies with version and source"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "reuse-recorded-stack",
+      "prompt": "Write the package.json and Dockerfile for this project, and add Redis caching with a Node client library. Tell me the versions you used.",
+      "expected_output": "Versions already in STACK.md are used as recorded without being re-checked or changed; only the Redis server and client are looked up; STACK.md gains rows for them.",
+      "files": ["fixtures/recorded-stack/STACK.md"],
+      "assertions": [
+        "Every technology already in STACK.md appears in package.json or the Dockerfile at exactly the recorded version",
+        "The Redis client and Redis server versions were looked up live and are at least 7 days old",
+        "STACK.md gains rows for the Redis client and server and keeps the existing rows unchanged",
+        "Dependencies in package.json are pinned to exact versions (no ^ or ~)",
+        "The Docker base image uses a full version tag, not latest or a bare major"
+      ]
+    }
+  ]
+}
