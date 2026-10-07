@@ -2,7 +2,7 @@
 """Look up the newest stable, aged release of each item from its live registry.
 
 Usage:
-    python stable_version.py [--min-age-days N] SPEC [SPEC ...]
+    python stable_version.py [--min-age-days N] [--cutoff TIMESTAMP] SPEC [SPEC ...]
 
 SPEC forms:
     npm:<package>            pypi:<package>         crates:<crate>
@@ -11,6 +11,9 @@ SPEC forms:
 
 Append @<line> to an npm, pypi or crates spec to stay inside one release line,
 for example npm:@types/node@24 or pypi:django@5.2.
+
+The first output line prints the cutoff. Pass it back with --cutoff on later runs
+so every lookup in one task is judged against the same moment.
 
 Standard library only. All lookups run in parallel; one failure does not stop the rest.
 """
@@ -31,6 +34,7 @@ DEFAULT_MIN_AGE_DAYS = 7
 # Registries answer in well under this; a longer wait usually means no network.
 TIMEOUT_SECONDS = 30
 NOW = datetime.now(timezone.utc)
+CUTOFF = NOW  # replaced in main(): a release qualifies when published at or before this moment
 
 
 def fetch(url, accept="application/json"):
@@ -77,7 +81,7 @@ def choose(releases, min_age, ceiling=None):
         ranked = [v for v in ranked if order(v) <= order(ceiling)]
     skipped = []
     for version in ranked:
-        if age_days(releases[version]) >= min_age:
+        if releases[version] <= CUTOFF:
             return version, skipped
         skipped.append(version)
     return None, skipped
@@ -86,8 +90,9 @@ def choose(releases, min_age, ceiling=None):
 def describe(spec, releases, pick, skipped, notes):
     lines = []
     if pick:
-        lines.append("%s  ->  %s  (published %s, %.1f days old)" % (
-            spec, pick, releases[pick].date().isoformat(), age_days(releases[pick])))
+        barely = "; only just past the wait" if releases[pick] > CUTOFF - timedelta(days=1) else ""
+        lines.append("%s  ->  %s  (published %s, %.1f days old%s)" % (
+            spec, pick, releases[pick].date().isoformat(), age_days(releases[pick]), barely))
     elif skipped:
         lines.append("%s  ->  NO stable release is old enough; decide with the user" % spec)
     else:
@@ -120,10 +125,19 @@ def npm(name, min_age):
         meta = versions[pick]
         if meta.get("engines"):
             notes.append("engines: " + json.dumps(meta["engines"]))
-        if meta.get("peerDependencies"):
-            notes.append("peers: " + json.dumps(meta["peerDependencies"]))
-    if other_tags:
-        notes.append("other tags: " + ", ".join("%s=%s" % kv for kv in list(other_tags.items())[:5]))
+        peers = meta.get("peerDependencies") or {}
+        optional = {k for k, v in (meta.get("peerDependenciesMeta") or {}).items() if v.get("optional")}
+        required = {k: v for k, v in peers.items() if k not in optional}
+        if required:
+            notes.append("required peers: " + json.dumps(required))
+        if optional:
+            shown = sorted(optional & set(peers))
+            notes.append("optional peers (install only the ones the project uses): " + ", ".join(
+                "%s %s" % (k, peers[k]) for k in shown[:12]) + (" ..." if len(shown) > 12 else ""))
+        # Only tags ahead of the pick are worth knowing about (an upcoming major, a beta-only generation).
+        ahead = {k: v for k, v in other_tags.items() if order(v)[:3] > order(pick)[:3]}
+        if ahead:
+            notes.append("pre-release tags ahead of this: " + ", ".join("%s=%s" % kv for kv in list(ahead.items())[:4]))
     return describe("npm:" + name + ("@" + line if line else ""), stable, pick, skipped, notes)
 
 
@@ -158,7 +172,7 @@ def go(module, min_age):
     stable = {}
     for version in sorted(listed, key=order, reverse=True)[:8]:
         stable[version] = when(fetch(base + version + ".info")["Time"])
-        if age_days(stable[version]) >= min_age:
+        if stable[version] <= CUTOFF:
             break
     pick, skipped = choose(stable, min_age)
     return describe("go:" + module, stable, pick, skipped, [])
@@ -169,7 +183,14 @@ def gh(repo, min_age):
     stable = {r["tag_name"]: when(r["published_at"]) for r in doc
               if not r.get("prerelease") and not r.get("draft") and r.get("published_at")}
     pick, skipped = choose(stable, min_age)
-    return describe("gh:" + repo, stable, pick, skipped, [])
+    notes = []
+    if pick:
+        try:  # the commits endpoint resolves annotated tags to the commit they point at
+            notes.append("commit: " + fetch("https://api.github.com/repos/%s/commits/%s" % (
+                repo, urllib.parse.quote(pick, safe="")))["sha"])
+        except Exception:
+            notes.append("commit: not resolved; use git ls-remote <repo url> 'refs/tags/%s^{}'" % pick)
+    return describe("gh:" + repo, stable, pick, skipped, notes)
 
 
 def eol(product, min_age):
@@ -186,8 +207,16 @@ def eol(product, min_age):
     live = [c for c in cycles if supported(c)]
     has_lts = any(c.get("lts") for c in cycles)
     preferred = next((c for c in live if lts_now(c)), None) if has_lts else (live[0] if live else None)
-    lines = ["eol:%s  ->  %s" % (product, "line %s, newest patch %s" % (preferred["cycle"], preferred.get("latest"))
-                                  if preferred else "NO supported line found")]
+    cutoff_day = CUTOFF.date().isoformat()
+
+    def young(c):
+        return bool(c.get("latestReleaseDate")) and c["latestReleaseDate"] >= cutoff_day
+
+    lines = ["eol:%s  ->  %s" % (product, "%s  (line %s; use this exact version everywhere)" % (
+        preferred.get("latest"), preferred["cycle"]) if preferred else "NO supported line found")]
+    if preferred and young(preferred):
+        lines.append("    NOTE: this patch was released %s, inside the wait. Runtime patches are usually security"
+                     " fixes, so it is normally right to take it; say so in the plan." % preferred["latestReleaseDate"])
     for c in live:
         status = "LTS" if lts_now(c) else ("LTS from %s" % c["lts"] if isinstance(c.get("lts"), str) else
                                            ("not LTS" if has_lts else "supported"))
@@ -205,9 +234,15 @@ def docker(ref, min_age):
     try:
         doc = fetch("https://hub.docker.com/v2/repositories/%s/tags/%s" % (repo, tag))
     except urllib.error.HTTPError as err:
-        if err.code == 404:
-            return "docker:%s  ->  TAG DOES NOT EXIST on Docker Hub" % ref
-        raise
+        if err.code != 404:
+            raise
+        version = tag.split("-")[0]
+        found = fetch("https://hub.docker.com/v2/repositories/%s/tags?page_size=100&name=%s" % (repo, version))
+        names = sorted(t["name"] for t in found.get("results", []) if t["name"].startswith(version))
+        slim = [n for n in names if "slim" in n] or names
+        return "docker:%s  ->  TAG DOES NOT EXIST. %s" % (ref, (
+            "Tags that do exist for %s: %s" % (version, ", ".join(slim[:10]))) if names else
+            "No tag starts with %s; check the version." % version)
     return "docker:%s  ->  tag exists (image last pushed %s)" % (ref, (doc.get("last_updated") or "")[:10])
 
 
@@ -217,7 +252,8 @@ SOURCES = {"npm": npm, "pypi": pypi, "crates": crates, "go": go, "gh": gh, "eol"
 def lookup(spec, min_age):
     kind, _, name = spec.partition(":")
     if kind not in SOURCES or not name:
-        return "%s  ->  ERROR: unknown spec; use one of %s" % (spec, ", ".join(k + ":" for k in SOURCES))
+        return "%s  ->  ERROR: not looked up. Prefix it with its source, one of %s" % (
+            spec, ", ".join(k + ":" for k in SOURCES))
     try:
         return SOURCES[kind](name, min_age)
     except urllib.error.HTTPError as err:
@@ -231,10 +267,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("specs", nargs="+", metavar="SPEC")
     parser.add_argument("--min-age-days", type=float, default=DEFAULT_MIN_AGE_DAYS)
+    parser.add_argument("--cutoff", help="reuse the cutoff printed by an earlier run in the same task")
     args = parser.parse_args()
-    cutoff = (NOW - timedelta(days=args.min_age_days)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    global CUTOFF
+    CUTOFF = when(args.cutoff) if args.cutoff else NOW - timedelta(days=args.min_age_days)
     print("checked %s UTC | minimum age %g days | cutoff %s" % (
-        NOW.strftime("%Y-%m-%d %H:%M"), args.min_age_days, cutoff))
+        NOW.strftime("%Y-%m-%d %H:%M"), args.min_age_days, CUTOFF.strftime("%Y-%m-%dT%H:%M:%SZ")))
     with ThreadPoolExecutor(max_workers=8) as pool:
         for block in pool.map(lambda s: lookup(s, args.min_age_days), args.specs):
             print(block)
