@@ -52,7 +52,7 @@ A version number recalled from training is a lead, not an answer: it may be old,
    | <name> | <exact version> | <YYYY-MM-DD> | <registry or URL> | <newer release skipped and why, support end date, open advisory, docs URL> |
    ```
 
-8. **Check every file you wrote against the record.** Read back each manifest, Dockerfile and workflow and compare every version, image tag and action reference with `STACK.md`. Each one has to match a row exactly, and the same runtime version has to appear everywhere it is named. Anything that is not in the record gets looked up now or removed. This is where a bare `python:3.14` tag, a second Python version in CI, or an action remembered rather than verified gets caught.
+8. **Check every file you wrote against the record.** Read back each manifest, Dockerfile and workflow and compare every version, image tag and action reference with `STACK.md`. Each one has to match a row exactly, and the same runtime version has to appear everywhere it is named. Anything that is not in the record gets looked up now or removed. Confirm too that the lockfile from step 4 exists wherever a file you wrote refers to one, and that the report states the advisory result from step 5; if either step was skipped, do it now or say plainly that it was not done. This is where a bare `python:3.14` tag, a second Python version in CI, or an action remembered rather than verified gets caught.
 
 ## Reporting
 
