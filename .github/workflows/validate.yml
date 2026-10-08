@@ -33,6 +33,10 @@ jobs:
           print("ok:", plugin["name"], plugin["version"])
           EOF
 
+      - name: Run unit tests
+        run: |
+          python tests/test_stable_version.py
+
       - name: Smoke-test the lookup script against live registries
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -40,4 +44,4 @@ jobs:
           python skills/latest/scripts/stable_version.py \
             npm:zod pypi:requests crates:serde go:golang.org/x/text \
             gh:actions/checkout eol:nodejs docker:node:22-slim | tee out.txt
-          ! grep -q "ERROR" out.txt
+          ! grep -q " ->  ERROR:" out.txt

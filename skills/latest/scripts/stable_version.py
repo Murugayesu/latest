@@ -37,11 +37,14 @@ TIMEOUT_SECONDS = 30
 # what an abandoned or renamed package looks like, so it is worth one look.
 QUIET_DAYS = 365
 NOW = datetime.now(timezone.utc)
-CUTOFF = NOW  # replaced in main(): a release qualifies when published at or before this moment
+CUTOFF = NOW - timedelta(days=DEFAULT_MIN_AGE_DAYS)
 
 
 def fetch(url, accept="application/json"):
-    headers = {"User-Agent": "latest-skill-version-check", "Accept": accept}
+    headers = {
+        "User-Agent": "latest-skill-version-check (https://github.com/Murugayesu/latest)",
+        "Accept": accept,
+    }
     token = os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
     if token and "api.github.com" in url:
         headers["Authorization"] = "Bearer " + token
@@ -195,7 +198,11 @@ def crates(name, min_age):
 def go(module, min_age):
     escaped = re.sub(r"[A-Z]", lambda m: "!" + m.group().lower(), module)
     base = "https://proxy.golang.org/%s/@v/" % escaped
-    with urllib.request.urlopen(base + "list", timeout=TIMEOUT_SECONDS) as r:
+    req = urllib.request.Request(
+        base + "list",
+        headers={"User-Agent": "latest-skill-version-check (https://github.com/Murugayesu/latest)"},
+    )
+    with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS) as r:
         listed = [v for v in r.read().decode().split() if re.fullmatch(r"v\d+\.\d+\.\d+(\+incompatible)?", v)]
     stable = {}
     for version in sorted(listed, key=order, reverse=True)[:8]:
@@ -203,7 +210,7 @@ def go(module, min_age):
         if stable[version] <= CUTOFF:
             break
     pick, skipped = choose(stable, min_age)
-    return describe("go:" + module, stable, pick, skipped, [])
+    return describe("go:" + module, stable, pick, skipped, [quiet_note(stable)])
 
 
 def gh(repo, min_age):
@@ -257,7 +264,9 @@ def eol(product, min_age):
 
 
 def docker(ref, min_age):
-    image, _, tag = ref.partition(":")
+    image, sep, tag = ref.partition(":")
+    if not sep or not tag:
+        return "docker:%s  ->  ERROR: tag required; use docker:<image>:<tag>" % ref
     repo = image if "/" in image else "library/" + image
     try:
         doc = fetch("https://hub.docker.com/v2/repositories/%s/tags/%s" % (repo, tag))
@@ -265,8 +274,11 @@ def docker(ref, min_age):
         if err.code != 404:
             raise
         version = tag.split("-")[0]
-        found = fetch("https://hub.docker.com/v2/repositories/%s/tags?page_size=100&name=%s" % (repo, version))
-        names = sorted(t["name"] for t in found.get("results", []) if t["name"].startswith(version))
+        try:
+            found = fetch("https://hub.docker.com/v2/repositories/%s/tags?page_size=100&name=%s" % (repo, version))
+            names = sorted(t["name"] for t in found.get("results", []) if t["name"].startswith(version))
+        except Exception:
+            names = []
         slim = [n for n in names if "slim" in n] or names
         return "docker:%s  ->  TAG DOES NOT EXIST. %s" % (ref, (
             "Tags that do exist for %s: %s" % (version, ", ".join(slim[:10]))) if names else
@@ -298,7 +310,13 @@ def main():
     parser.add_argument("--cutoff", help="reuse the cutoff printed by an earlier run in the same task")
     args = parser.parse_args()
     global CUTOFF
-    CUTOFF = when(args.cutoff) if args.cutoff else NOW - timedelta(days=args.min_age_days)
+    if args.cutoff:
+        try:
+            CUTOFF = when(args.cutoff)
+        except ValueError:
+            sys.exit("ERROR: invalid ISO cutoff timestamp '%s'; expected format YYYY-MM-DDTHH:MM:SSZ" % args.cutoff)
+    else:
+        CUTOFF = NOW - timedelta(days=args.min_age_days)
     print("checked %s UTC | minimum age %g days | cutoff %s" % (
         NOW.strftime("%Y-%m-%d %H:%M"), args.min_age_days, CUTOFF.strftime("%Y-%m-%dT%H:%M:%SZ")))
     with ThreadPoolExecutor(max_workers=8) as pool:
