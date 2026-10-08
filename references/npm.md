@@ -57,7 +57,13 @@ Read which top-level package each finding arrives through. For a package being a
 
 ## Reading docs for an unfamiliar major
 
-`npm view <pkg>@<ver> readme` prints the README of that exact version without installing anything.
+Without installing anything:
+
+- The `docs:` link in the script output points at the project's site or repository.
+- `npm view <pkg>@<ver> readme` prints the README of that exact version.
+- `npm pack <pkg>@<ver>` into a scratch directory downloads the tarball. Its `.d.ts` files are the authoritative answer to "does this function exist in this version", and large frameworks often ship their docs inside it.
+
+A new major of a compiler or toolchain (TypeScript, ESLint, a bundler) can be incompatible with tools that do not declare it as a peer. Before pinning one, check that the framework and the lint or build tools in the same project accept it; if one does not, use `npm:<pkg>@<line>` to take the newest line they all accept and say so.
 
 ## Keep the rule after setup (new projects)
 

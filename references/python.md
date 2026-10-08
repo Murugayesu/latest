@@ -63,6 +63,10 @@ curl -s -d '{"queries":[{"package":{"name":"<pkg>","ecosystem":"PyPI"},"version"
 
 An empty result object for a package means no known advisory. Check the whole lockfile, not only the packages named in the request.
 
+## Reading docs for an unfamiliar major
+
+The `docs:` link in the script output points at the changelog or documentation. For an exact answer to "does this function or parameter exist in this version", read the source at the release tag in the project's repository. After `uv lock`, look through `uv.lock` for transitive packages on a major you do not know: a web framework's server layer or an SDK's HTTP client can move to a new major, or to a renamed package, without the package you named changing its own major.
+
 ## Tooling versions
 
 uv, Ruff and similar tools are also published on PyPI; look them up like any other item (`pypi:uv`) and use the same version in the Dockerfile and CI.

@@ -33,6 +33,9 @@ from datetime import datetime, timedelta, timezone
 DEFAULT_MIN_AGE_DAYS = 7
 # Registries answer in well under this; a longer wait usually means no network.
 TIMEOUT_SECONDS = 30
+# A package with no release for this long is often finished and fine, but it is also
+# what an abandoned or renamed package looks like, so it is worth one look.
+QUIET_DAYS = 365
 NOW = datetime.now(timezone.utc)
 CUTOFF = NOW  # replaced in main(): a release qualifies when published at or before this moment
 
@@ -87,6 +90,17 @@ def choose(releases, min_age, ceiling=None):
     return None, skipped
 
 
+def quiet_note(releases):
+    """Flag packages whose newest stable release of any line is old: possibly superseded."""
+    if not releases:
+        return None
+    newest = max(releases.values())
+    if age_days(newest) < QUIET_DAYS:
+        return None
+    return ("NOTE: no release for %d days. Check its registry page or README for a successor or a"
+            " rename before choosing it." % age_days(newest))
+
+
 def describe(spec, releases, pick, skipped, notes):
     lines = []
     if pick:
@@ -138,6 +152,11 @@ def npm(name, min_age):
         ahead = {k: v for k, v in other_tags.items() if order(v)[:3] > order(pick)[:3]}
         if ahead:
             notes.append("pre-release tags ahead of this: " + ", ".join("%s=%s" % kv for kv in list(ahead.items())[:4]))
+        repo = meta.get("repository")
+        link = meta.get("homepage") or (repo.get("url") if isinstance(repo, dict) else repo)
+        if link:
+            notes.append("docs: " + link)
+    notes.append(quiet_note(stable))
     return describe("npm:" + name + ("@" + line if line else ""), stable, pick, skipped, notes)
 
 
@@ -152,6 +171,13 @@ def pypi(name, min_age):
             requires[version] = live[0].get("requires_python")
     pick, skipped = choose(stable, min_age)
     notes = ["requires-python: %s" % requires[pick]] if pick and requires.get(pick) else []
+    urls = doc.get("info", {}).get("project_urls") or {}
+    for label in ("Changelog", "Release Notes", "Documentation", "Homepage", "Repository", "Source"):
+        match = next((v for k, v in urls.items() if k.lower() == label.lower()), None)
+        if match:
+            notes.append("docs: %s (%s)" % (match, label.lower()))
+            break
+    notes.append(quiet_note(stable))
     return describe("pypi:" + name + ("@" + line if line else ""), stable, pick, skipped, notes)
 
 
@@ -161,7 +187,7 @@ def crates(name, min_age):
     stable = {v["num"]: when(v["created_at"]) for v in doc.get("versions", [])
               if not v.get("yanked") and re.fullmatch(r"\d+\.\d+\.\d+", v["num"]) and in_line(v["num"], line)}
     pick, skipped = choose(stable, min_age)
-    return describe("crates:" + name + ("@" + line if line else ""), stable, pick, skipped, [])
+    return describe("crates:" + name + ("@" + line if line else ""), stable, pick, skipped, [quiet_note(stable)])
 
 
 def go(module, min_age):

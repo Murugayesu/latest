@@ -22,7 +22,7 @@ A version number recalled from training is a lead, not an answer: it may be old,
    python scripts/stable_version.py eol:nodejs eol:postgresql npm:next pypi:fastapi gh:actions/checkout
    ```
 
-   For each item it prints the version to use: the newest final release at least 7 days old, what it skipped as too new, deprecation and pre-release warnings, peer and runtime requirements, the commit behind a GitHub tag, and for `eol:` items the supported lines with LTS and end-of-life dates. Add `@<line>` to stay inside a release line, such as `npm:@types/node@24` to match Node 24.
+   For each item it prints the version to use: the newest final release at least 7 days old, what it skipped as too new, deprecation and pre-release warnings, peer and runtime requirements, a docs or changelog link, the commit behind a GitHub tag, and for `eol:` items the supported lines with LTS and end-of-life dates. Add `@<line>` to stay inside a release line, such as `npm:@types/node@24` to match Node 24.
 
    The first output line gives the check date (UTC; use it as the "Checked" date) and a cutoff timestamp. Items that depend on a result, such as an image tag for the runtime version just found, go in a second call with `--cutoff <that timestamp>` so both calls judge age against the same moment.
 
@@ -31,7 +31,7 @@ A version number recalled from training is a lead, not an answer: it may be old,
    - Python: [references/python.md](references/python.md)
    - Runtimes, databases, container images, CI actions, Go, Rust, anything else: [references/platforms.md](references/platforms.md)
 
-4. **Resolve the whole set together.** Let the project's package manager resolve the chosen versions without installing, with the same cutoff applied to transitive packages. The exact commands are in the reference files. If it reports a peer, engine or runtime conflict, change the version that causes it and resolve again. A clean resolve is necessary but not proof: declared peer ranges can be incomplete, so when fitting a new package to an older installed one, follow the check in the reference file.
+4. **Resolve the whole set together.** Let the project's package manager resolve the chosen versions without installing, with the same cutoff applied to transitive packages. The exact commands are in the reference files. If it reports a peer, engine or runtime conflict, change the version that causes it and resolve again. A clean resolve is necessary but not proof: declared peer ranges can be incomplete, so when fitting a new package to an older installed one, follow the check in the reference file. Then scan the lockfile for transitive packages on a major you do not know (a framework's underlying server, an SDK's HTTP client). They change the code you are about to write as much as the packages you named.
 
 5. **Check advisories on the resolved set**, since most arrive through transitive packages. If another stable version of something you are adding clears a finding, switch and return to step 4. If none does, keep the choice and report the open advisory. A finding in something already installed is reported, with the version that fixes it, and left alone.
 
@@ -39,6 +39,9 @@ A version number recalled from training is a lead, not an answer: it may be old,
    - The product's current generation exists only as a pre-release. Show the stable older line and the pre-release, and recommend one.
    - Every candidate is deprecated, or none is old enough.
    - A runtime's LTS line changes within a few weeks, or you want a different line from the one the script suggests. Give the reason.
+   - The script notes that a package has had no release for over a year. Many such packages are simply finished, but this is also what a superseded or renamed package looks like (an SDK replaced by a new official one under another name). Check its registry page or README for a successor notice and say what you found.
+
+   When nobody is available to ask, take the script's suggestion or the stable line, and state the open decision at the top of the report.
 
 7. **Record it.** Add a row to `STACK.md` at the project root for each version verified in this session, leaving existing rows as they are. Then pin those exact versions in the manifest and keep the lockfile.
 
