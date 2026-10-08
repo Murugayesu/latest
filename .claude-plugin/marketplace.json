@@ -1,0 +1,15 @@
+{
+  "name": "murugayesu",
+  "description": "Skills published by Murugayesu",
+  "owner": {
+    "name": "Murugayesu",
+    "url": "https://github.com/Murugayesu"
+  },
+  "plugins": [
+    {
+      "name": "latest",
+      "source": "./",
+      "description": "Verifies the latest stable version of a runtime, framework, library, SDK, tool or image against its live registry before it is named or pinned."
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+name: validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # v7.0.0
+        with:
+          python-version: "3.x"
+
+      - name: Check the skill against the Agent Skills spec
+        run: |
+          pip install skills-ref
+          agentskills validate skills/latest
+
+      - name: Check the manifests are valid JSON with matching names
+        run: |
+          python - <<'EOF'
+          import json
+          plugin = json.load(open(".claude-plugin/plugin.json"))
+          market = json.load(open(".claude-plugin/marketplace.json"))
+          entry = market["plugins"][0]
+          assert entry["name"] == plugin["name"], "marketplace entry name must equal plugin.json name"
+          print("ok:", plugin["name"], plugin["version"])
+          EOF
+
+      - name: Smoke-test the lookup script against live registries
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python skills/latest/scripts/stable_version.py \
+            npm:zod pypi:requests crates:serde go:golang.org/x/text \
+            gh:actions/checkout eol:nodejs docker:node:22-slim | tee out.txt
+          ! grep -q "ERROR" out.txt

@@ -1,0 +1,14 @@
+{
+  "name": "latest",
+  "displayName": "Latest",
+  "version": "0.1.0",
+  "description": "Verifies the latest stable version of a runtime, framework, library, SDK, tool or image against its live registry before it is named or pinned.",
+  "author": {
+    "name": "Murugayesu",
+    "url": "https://github.com/Murugayesu"
+  },
+  "homepage": "https://github.com/Murugayesu/latest#readme",
+  "repository": "https://github.com/Murugayesu/latest",
+  "license": "MIT",
+  "keywords": ["versions", "dependencies", "supply-chain", "npm", "pypi", "stack"]
+}

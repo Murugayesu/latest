@@ -50,7 +50,9 @@ def fetch(url, accept="application/json"):
 
 
 def when(text):
-    stamp = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    # Sub-second digits are dropped: they are irrelevant here, and Python before 3.11
+    # only parses fractions of exactly 3 or 6 digits.
+    stamp = datetime.fromisoformat(re.sub(r"\.\d+", "", text).replace("Z", "+00:00"))
     return stamp if stamp.tzinfo else stamp.replace(tzinfo=timezone.utc)
 
 

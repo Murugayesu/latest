@@ -1,6 +1,11 @@
 ---
 name: latest
 description: Verifies the latest stable version of any language runtime, framework, library, SDK, CLI tool, database, container image or CI action against its live registry, and picks the newest release that is final, supported, at least 7 days old and free of known advisories. Use whenever a version is about to be named or pinned, even when it seems well known - proposing a tech stack, planning a new project, adding or choosing a dependency, writing package.json, pyproject.toml, requirements.txt, Cargo.toml, go.mod, a Dockerfile or a CI workflow, or giving an install command. Also use when asked what the latest or current version of something is, or whether a version is still supported.
+license: MIT
+compatibility: Requires Python 3.8 or later, a shell, and network access to package registries (npm, PyPI, crates.io, Go proxy, GitHub, Docker Hub, endoflife.date, OSV).
+metadata:
+  author: Murugayesu
+  version: "0.1.0"
 ---
 
 # latest

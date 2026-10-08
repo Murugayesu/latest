@@ -1,0 +1,2 @@
+# Skill files are read by agents on every platform; keep line endings stable.
+* text=auto eol=lf
