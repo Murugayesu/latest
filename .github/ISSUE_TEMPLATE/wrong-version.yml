@@ -1,0 +1,30 @@
+name: Wrong or surprising version
+description: The script or the skill picked a version you think is wrong.
+labels: ["wrong-version"]
+body:
+  - type: input
+    id: spec
+    attributes:
+      label: What was looked up
+      description: The spec or the package, for example npm:next or pypi:fastapi
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Script output
+      description: Paste the full output, including the first line with the date and cutoff.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected, and why
+    validations:
+      required: true
+  - type: input
+    id: client
+    attributes:
+      label: Agent and model, if an agent was involved
+      description: For example Claude Code 2.1.296 with Opus 5.5

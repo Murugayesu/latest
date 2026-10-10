@@ -10,7 +10,7 @@ metadata:
 
 # latest
 
-A version number recalled from training is a lead, not an answer: it may be old, deprecated, or may not exist. A search result or blog post is no better, because it was true on the day it was written. The newest release is not the answer either: it may be a pre-release, hours old, or carry an open advisory. This skill finds the newest version that is safe to commit to, once per technology per project, and records it so later sessions do not have to ask again.
+A version number recalled from training is a lead, not an answer: it may be old, deprecated, or may not exist. A search result or blog post is no better, because it was true on the day it was written. The newest release is not the answer either: it may be a pre-release, hours old, or carry an open advisory. This skill finds the newest version that passes those checks, once per technology per project, and records it so later sessions do not have to ask again.
 
 ## Workflow
 

@@ -1,0 +1,18 @@
+name: Registry or client request
+description: Ask for a registry the script does not cover, or report a result on another agent.
+labels: ["enhancement"]
+body:
+  - type: input
+    id: what
+    attributes:
+      label: Registry or client
+      description: For example NuGet, Maven Central, or Cursor
+    validations:
+      required: true
+  - type: textarea
+    id: detail
+    attributes:
+      label: Details
+      description: For a registry, link its API for listing versions with publish dates. For a client, say how you installed the skill, whether it loaded, and the date.
+    validations:
+      required: true

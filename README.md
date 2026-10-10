@@ -1,41 +1,73 @@
 # latest
 
-An agent skill that makes a coding agent check the live registry before it names or pins a version, and pick the newest release that is safe to commit to rather than the newest one that exists.
+**A portable Agent Skill that checks live registries before a coding agent names or pins a dependency version.** It accounts for release age and support status, then guides dependency resolution and advisory checks.
 
-Models recall version numbers from training data, and that data is always behind the registry. The result is versions that are old, deprecated, or that never existed. Looking up "the latest" is not enough either: the newest release may be a pre-release, hours old, or carry an open advisory.
+```bash
+npx skills add Murugayesu/latest --skill latest
+```
+
+Coding agents recall version numbers from training data, which is always behind the registry. The result is versions that are old, deprecated, or that never existed. Taking "the latest" is not enough either: the newest release may be a pre-release, hours old, or have an open advisory.
+
+## Try it in 60 seconds
+
+1. Install it (see [Install](#install) for other routes).
+2. In a project folder, ask your coding agent:
+
+   > I'm starting a Node + TypeScript API with Express, Postgres and Zod. Write the package.json with versions.
+
+3. The agent loads the skill and runs one lookup. The script call looks like this:
+
+   ```console
+   $ python scripts/stable_version.py eol:nodejs npm:next npm:prisma pypi:fastapi gh:actions/checkout
+   checked 2026-10-07 20:39 UTC | minimum age 7 days | cutoff 2026-09-30T20:35:17Z
+   eol:nodejs  ->  24.21.0  (line 24; use this exact version everywhere)
+       26       latest 26.10.0      released 2026-09-22   LTS from 2026-10-28 end of life 2029-04-30
+       24       latest 24.21.0      released 2026-09-08   LTS              end of life 2028-04-30
+   npm:next  ->  16.3.8  (published 2026-09-30, 7.2 days old; only just past the wait)
+       skipped as too new: 16.4.0 (1.1 days)
+   npm:prisma  ->  7.10.0  (published 2026-08-25, 43.3 days old)
+       WARNING: the 'latest' tag points at pre-release 8.0.0-rc.21; a bare install would fetch it
+   pypi:fastapi  ->  0.142.2  (published 2026-09-30, 7.4 days old; only just past the wait)
+       skipped as too new: 0.142.3 (0.1 days)
+   gh:actions/checkout  ->  v7.0.1  (published 2026-07-20, 79.2 days old)
+       commit: 3d3c42e5aac5ba805825da76410c181273ba90b1
+   ```
+
+   This output is illustrative: it is shortened and dated 2026-10-07. The versions will be different when you run it, which is the point.
+
+You can also run the script on its own, with no agent:
+
+```bash
+python skills/latest/scripts/stable_version.py npm:zod pypi:requests eol:python
+```
 
 ## What it does
 
 When the agent is about to name a version in a plan, a manifest, a Dockerfile, a CI workflow or an install command, the skill has it:
 
 1. Keep what the project already decided (`STACK.md`, then the lockfile). Nothing is upgraded unless asked.
-2. Look up everything else in one call to a bundled script.
+2. Look up everything else in one call to the bundled script.
 3. Take the newest release that is final, not deprecated or yanked, at least 7 days old, and on a supported line.
 4. Resolve the whole set together with the project's package manager, applying the same 7-day cutoff to transitive packages.
-5. Check advisories on the resolved set.
+5. Check advisories on the resolved set and report what it finds.
 6. Record the result in `STACK.md` and check every file it wrote against that record.
 
-The lookup script covers npm, PyPI, crates.io, Go modules, GitHub releases, Docker Hub tags and endoflife.date:
+The lookup script covers npm, PyPI, crates.io, Go modules, GitHub releases, Docker Hub tags and endoflife.date.
 
-```console
-$ python scripts/stable_version.py eol:nodejs npm:next npm:prisma pypi:fastapi gh:actions/checkout
-checked 2026-10-07 20:39 UTC | minimum age 7 days | cutoff 2026-09-30T20:35:17Z
-eol:nodejs  ->  24.21.0  (line 24; use this exact version everywhere)
-    26       latest 26.10.0      released 2026-09-22   LTS from 2026-10-28 end of life 2029-04-30
-    24       latest 24.21.0      released 2026-09-08   LTS              end of life 2028-04-30
-npm:next  ->  16.3.8  (published 2026-09-30, 7.2 days old; only just past the wait)
-    skipped as too new: 16.4.0 (1.1 days)
-npm:prisma  ->  7.10.0  (published 2026-08-25, 43.3 days old)
-    WARNING: the 'latest' tag points at pre-release 8.0.0-rc.21; a bare install would fetch it
-pypi:fastapi  ->  0.142.2  (published 2026-09-30, 7.4 days old; only just past the wait)
-    skipped as too new: 0.142.3 (0.1 days)
-gh:actions/checkout  ->  v7.0.1  (published 2026-07-20, 79.2 days old)
-    commit: 3d3c42e5aac5ba805825da76410c181273ba90b1
-```
+### What it does not promise
 
-(Output shortened. The versions shown are from the day it was run and will be different today, which is the point.)
+- **It is not a security guarantee.** The 7-day release-age rule is a policy heuristic. An advisory check that comes back clean means no known advisory was found in the sources checked, not that a version is secure.
+- **It does not make generated code more correct for a version.** In testing, a strong model already wrote working code for new major versions without it.
 
 ## Install
+
+**Any agent supported by the [Skills CLI](https://github.com/vercel-labs/skills)**
+
+```bash
+npx skills add Murugayesu/latest --skill latest
+```
+
+Add `--global --agent <name>` to choose the scope and the agent, for example `--global --agent claude-code`. The CLI sends anonymous install telemetry unless you set `DISABLE_TELEMETRY=1`.
 
 **Claude Code, as a plugin**
 
@@ -45,12 +77,6 @@ claude plugin install latest@murugayesu
 ```
 
 Updates are manual for third-party marketplaces: run `claude plugin update latest@murugayesu`.
-
-**Any agent that supports Agent Skills**
-
-```bash
-npx skills add Murugayesu/latest
-```
 
 **By hand**
 
@@ -64,6 +90,16 @@ A skill loads when the agent judges it relevant, so it can be skipped. To make i
 Before naming a version of any runtime, framework, library, SDK or tool in a plan, manifest or install command, use the `latest` skill. If STACK.md exists, its versions are authoritative.
 ```
 
+## Tested clients
+
+| Client | Install | Loads on its own | Checked |
+|---|---|---|---|
+| Claude Code 2.1.296 (plugin route) | Works | Loaded in 4 of 4 version-related prompts, stayed quiet in 2 of 2 unrelated ones (Opus 5.5, one run each) | 2026-10-10 |
+| Skills CLI discovery (`--list`) | Finds the skill | Not applicable | 2026-10-08 |
+| Codex, Cursor, Gemini CLI and others | Not tested | Not tested | |
+
+If you try it on another client, please open an issue with the result.
+
 ## Requirements
 
 - Python 3.8 or later (standard library only; tested on 3.13)
@@ -72,7 +108,11 @@ Before naming a version of any runtime, framework, library, SDK or tool in a pla
 
 ## What it sends and where
 
-The script makes read-only HTTPS requests to public endpoints: `registry.npmjs.org`, `pypi.org`, `crates.io`, `proxy.golang.org`, `api.github.com`, `hub.docker.com` and `endoflife.date`. The names of the packages you look up are part of those requests. If `GITHUB_TOKEN` or `GH_TOKEN` is set, it is sent to `api.github.com` only, to raise the rate limit. There is no telemetry.
+- The script makes read-only HTTPS requests to public endpoints: `registry.npmjs.org`, `pypi.org`, `crates.io`, `proxy.golang.org`, `api.github.com`, `hub.docker.com` and `endoflife.date`.
+- The names of the packages you look up are part of those requests.
+- If `GITHUB_TOKEN` or `GH_TOKEN` is set, it is sent to `api.github.com` only, to raise the rate limit.
+- The script has no telemetry and writes nothing to disk.
+- The advisory step uses your package manager's audit command or `api.osv.dev`, which receive the package names and versions in your lockfile.
 
 ## Test results
 
@@ -91,13 +131,8 @@ What this shows:
 
 - The skill matters most on smaller models, which otherwise answer from memory or from stale search results.
 - On a strong model that already checks registries, it adds the 7-day wait, the advisory check and the record.
-- It does not make generated code more correct for a version. In these tests the strong model already got that right without it.
 
-What has not been tested:
-
-- How often an agent loads the skill without being told to.
-- Agents other than Claude Code.
-- Ecosystems beyond npm and PyPI in a full run (crates.io, Go, GitHub and Docker lookups are covered by the script's own checks only).
+In the runs above the skill was handed to the agent directly. Whether it loads unprompted was checked separately and is reported under [Tested clients](#tested-clients).
 
 The test prompts and fixtures are in [`evals/`](evals/).
 
@@ -106,7 +141,9 @@ The test prompts and fixtures are in [`evals/`](evals/).
 - A full run costs more steps than answering from memory: roughly 12 to 23 tool calls for a stack plan in testing.
 - The 7-day wait delays security fixes in libraries by up to a week. The skill reports what it skipped so you can overrule it.
 - "No release for over a year" is flagged for a human to look at; the script cannot tell a finished package from an abandoned one.
+- A package name that was invented by a model and later registered by someone else looks valid to the lookup.
 - Registries not built into the script (NuGet, Maven Central, RubyGems, Packagist) are handled by written instructions only.
+- Full runs have covered npm and PyPI. The crates.io, Go, GitHub and Docker lookups are covered by the script's own checks only.
 
 ## Layout
 
@@ -120,12 +157,15 @@ skills/latest/
     ├── python.md         Python
     └── platforms.md      runtimes, images, CI actions, Go, Rust
 evals/                    test prompts and fixtures
+tests/                    unit tests for the script
 .claude-plugin/           Claude Code plugin and marketplace manifests
 ```
 
-## Contributing
+## Help and contributing
 
-Issues and pull requests are welcome, especially a registry that returns a wrong answer or a case where the skill picked a bad version. Include the script output and the date.
+- **Wrong version picked, or a bug:** [open an issue](https://github.com/Murugayesu/latest/issues/new/choose). Include the script output and the date.
+- **Security problem:** see [SECURITY.md](SECURITY.md). Please do not open a public issue.
+- **Changes:** see [CONTRIBUTING.md](CONTRIBUTING.md) and the [changelog](CHANGELOG.md).
 
 ## License
 
